@@ -1,0 +1,46 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+// This 'Profile' model stores additional user data linked to Supabase's auth.users
+// You can add more fields here relevant to your application's user profiles.
+model Profile {
+  id         String   @id @default(uuid()) // Use UUID for profile IDs
+  user_id    String   @unique // This MUST be unique and will store the id from auth.users
+  username   String   @unique // Example: User's chosen username
+  avatar_url String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Link to other application data models using user_id
+  transactions Transaction[]
+  // ... other models that relate to a user's profile
+}
+
+// Example application data model
+model Transaction {
+  id          String   @id @default(cuid())
+  user_id     String   // This will store the id from auth.users, linking to the Profile
+  amount      Float
+  description String
+  date        DateTime @default(now())
+  category    String? // e.g., 'Food', 'Transport'
+
+  profile     Profile @relation(fields: [user_id], references: [user_id]) // Link to Profile model
+}
+
+// Add other application-specific models here (e.g., Budget, Category, RecurringExpense)
+// Remember to link them to the 'Profile' or directly to auth.users.id via a 'user_id' field.
