@@ -10,6 +10,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'User ID, username, and email are required' }, { status: 400 });
     }
 
+    // Check if the username is already taken
+    const existingUsername = await prisma.profile.findUnique({ where: { username } });
+    if (existingUsername) {
+      return NextResponse.json({ message: 'Username already exists.' }, { status: 409 });
+    }
     // Check if a profile already exists for this user_id
     const existingProfile = await prisma.profile.findUnique({
       where: { user_id: userId },

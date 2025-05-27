@@ -4,32 +4,38 @@
 import { useState } from "react";
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { supabase } from '@/lib/supabase'; // Import your Supabase client
+import { supabase } from '@/lib/supabase';
+import { Button } from '@/components/ui/button';
+import { FaGithub, FaGoogle } from 'react-icons/fa';
+import { Input } from '@/components/ui/input';
+import { useForm } from 'react-hook-form';
+import { Form, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form';
 
 export default function SignUpPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [username, setUsername] = useState(''); // Assuming username for your Profile
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  interface SignUpFormValues { username: string; email: string; password: string }
+  const form = useForm<SignUpFormValues>({ defaultValues: { username: '', email: '', password: '' } });
+  const onSubmit = form.handleSubmit(async (values) => {
     setError('');
     setSuccess('');
     setLoading(true);
 
+    console.debug('[SignUp] Sign-up attempt for:', values.email);
+
     // 1. Sign up with Supabase Auth
     const { data, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
+      email: values.email,
+      password: values.password,
       options: {
         // You can send additional user metadata if needed (e.g., for RLS)
-        // data: { username: username }
+        // data: { username: values.username }
       }
     });
+    console.debug('[SignUp] signUp response:', data, authError);
 
     if (authError) {
       setError(authError.message);
@@ -40,13 +46,16 @@ export default function SignUpPage() {
     if (data.user) {
       // 2. If user created successfully in Supabase Auth, create a corresponding Profile in your public schema
       try {
+        console.debug('[SignUp] Creating profile for user:', data.user.id);
         const response = await fetch('/api/create-profile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: data.user.id, username, email }),
+          body: JSON.stringify({ userId: data.user.id, username: values.username, email: values.email }),
         });
 
+        console.debug('[SignUp] Profile creation response status:', response.status);
         const profileData = await response.json();
+        console.debug('[SignUp] Profile creation data:', profileData);
 
         if (!response.ok) {
           // If profile creation fails, you might want to log this or handle it
@@ -61,73 +70,91 @@ export default function SignUpPage() {
         // Supabase sign-up doesn't auto-login by default, redirects to sign-in
         router.push('/auth/signin');
       } catch (profileError) {
-        console.error("Client-side profile creation error:", profileError);
+        console.error('[SignUp] Client-side profile creation error:', profileError);
         setError("An unexpected error occurred during profile setup.");
       }
     }
     setLoading(false);
+  });
+
+  const handleOAuthSignUp = async (provider: 'github' | 'google') => {
+    setError(''); setLoading(true);
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: `${window.location.origin}/auth/callback` }
+    });
+    console.debug('[SignUp] OAuth signUp response:', data, error);
+    if (error) setError(error.message);
+    setLoading(false);
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4">
-      <h1 className="text-3xl font-bold mb-6">Sign Up for Aether</h1>
-      {error && <p className="text-red-500 mb-4">{error}</p>}
-      {success && <p className="text-green-500 mb-4">{success}</p>}
-
-      <form onSubmit={handleSubmit} className="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
-        <div className="mb-4">
-          <label htmlFor="username" className="block text-gray-700 text-sm font-bold mb-2">Username</label>
-          <input
-            type="text"
-            id="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            required
-            disabled={loading}
-          />
+    <div className="flex items-center justify-center min-h-screen p-6 bg-gray-50">
+      <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-lg">
+        <h1 className="text-2xl font-semibold mb-6 text-center">Create your Aether account</h1>
+        {error && <p className="text-red-600 mb-4 text-sm text-center">{error}</p>}
+        {success && <p className="text-green-600 mb-4 text-sm text-center">{success}</p>}
+        <Form {...form}>
+          <form onSubmit={onSubmit} className="space-y-4" noValidate>
+            <FormItem>
+              <FormLabel htmlFor="username">Username</FormLabel>
+              <FormControl>
+                <Input
+                  id="username"
+                  type="text"
+                  disabled={loading}
+                  {...form.register('username', { required: 'Username is required' })}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+            <FormItem>
+              <FormLabel htmlFor="email">Email</FormLabel>
+              <FormControl>
+                <Input
+                  id="email"
+                  type="email"
+                  disabled={loading}
+                  {...form.register('email', { required: 'Email is required' })}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+            <FormItem>
+              <FormLabel htmlFor="password">Password</FormLabel>
+              <FormControl>
+                <Input
+                  id="password"
+                  type="password"
+                  disabled={loading}
+                  {...form.register('password', { required: 'Password is required' })}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Signing Up...' : 'Sign Up'}
+            </Button>
+          </form>
+        </Form>
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-500 mb-3">Or sign up with</p>
+          <div className="flex gap-4 justify-center">
+            <Button variant="outline" onClick={() => handleOAuthSignUp('github')} disabled={loading}>
+              <FaGithub className="mr-2" /> GitHub
+            </Button>
+            <Button variant="outline" onClick={() => handleOAuthSignUp('google')} disabled={loading}>
+              <FaGoogle className="mr-2" /> Google
+            </Button>
+          </div>
         </div>
-        <div className="mb-4">
-          <label htmlFor="email" className="block text-gray-700 text-sm font-bold mb-2">Email</label>
-          <input
-            type="email"
-            id="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
-            required
-            disabled={loading}
-          />
-        </div>
-        <div className="mb-6">
-          <label htmlFor="password" className="block text-gray-700 text-sm font-bold mb-2">Password</label>
-          <input
-            type="password"
-            id="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline"
-            required
-            disabled={loading}
-          />
-        </div>
-        <div className="flex items-center justify-between">
-          <button
-            type="submit"
-            className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-            disabled={loading}
-          >
-            {loading ? 'Signing Up...' : 'Sign Up'}
-          </button>
-        </div>
-      </form>
-
-      <p className="mt-4 text-sm text-gray-600">
-        Already have an account? {' '}
-        <Link href="/auth/signin" className="text-blue-500 hover:underline">
-          Sign in
-        </Link>
-      </p>
+        <p className="mt-6 text-center text-sm text-gray-600">
+          Already have an account?{' '}
+          <Link href="/auth/signin" className="text-primary hover:underline">
+            Sign in
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }

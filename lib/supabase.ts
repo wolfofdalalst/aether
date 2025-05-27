@@ -8,3 +8,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Debug: Log client initialization
+console.log('[supabase] Client initialized with URL:', supabaseUrl);
+
+// Debug: Log auth state changes
+supabase.auth.onAuthStateChange((event, session) => {
+  console.debug('[supabase] Auth state changed:', event, session);
+});

@@ -71,13 +71,7 @@ export const metadata: Metadata = {
     images: ['/images/twitter-card-image.jpg'], // Path from `public` directory
   },
 
-  // Viewport
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
+  
 
   // App Icons & Favicons
   icons: {
@@ -103,6 +97,13 @@ export const metadata: Metadata = {
 
   // PWA manifest (if you're building a PWA)
   manifest: '/manifest.webmanifest', // Path to your PWA manifest file
+};
+
+export const viewport = {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
 };
 
 export default function RootLayout({

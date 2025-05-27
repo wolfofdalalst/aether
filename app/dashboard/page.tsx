@@ -1,40 +1,63 @@
-import { getUser } from '@/utils/supabase-server'; // Import your server-side Supabase helper
-import { redirect } from 'next/navigation';
-import prisma from '@/lib/prisma'; // Import Prisma to fetch profile data
+"use client";
 
-export default async function DashboardPage() {
-  const user = await getUser(); // Get the Supabase auth user
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 
-  if (!user) {
-    redirect('/auth/signin'); // Redirect if not authenticated
-  }
+interface Profile {
+  id: string;
+  user_id: string;
+  username: string;
+  avatar_url?: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
-  // Fetch the user's profile from your public schema using Prisma
-  // This links the Supabase auth user ID to your custom profile data
-  const userProfile = await prisma.profile.findUnique({
-    where: { user_id: user.id },
-  });
+export default function DashboardPage() {
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const router = useRouter();
 
-  if (!userProfile) {
-    // Handle case where auth user exists but profile doesn't (e.g., race condition, or user didn't complete signup flow)
-    console.warn(`Auth user ${user.id} exists, but no profile found.`);
-    // You might redirect to a profile completion page
-    // For now, let's just show a generic message
-    return (
-      <div className="min-h-screen p-8">
-        <h1 className="text-4xl font-bold mb-4">Welcome, {user.email}!</h1>
-        <p className="text-lg text-gray-700">Your profile is being set up. Please complete it if necessary.</p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        console.debug('[Dashboard] session data:', session, 'sessionError:', sessionError);
+        if (sessionError || !session) {
+          console.error('No session or session error, redirecting:', sessionError);
+          router.replace('/auth/signin');
+          return;
+        }
+        // Query the Prisma-created table "Profile" (quoted) via Supabase REST
+        const { data, error } = await supabase
+          .from('Profile')
+          .select('*')
+          .eq('user_id', session.user.id)
+          .single();
+        console.debug('[Dashboard] fetched profile data:', data, error);
+        if (error || !data) {
+          console.error('Error fetching profile, redirecting:', error);
+          router.replace('/auth/signin');
+        } else {
+          setProfile(data as Profile);
+        }
+      } catch (err) {
+        console.error('[Dashboard] loadProfile error:', err);
+        router.replace('/auth/signin');
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadProfile();
+  }, [router]);
+
+  if (loading) return <div>Loading...</div>;
+  if (!profile) return <div>Error loading profile.</div>;
 
   return (
     <div className="min-h-screen p-8">
-      <h1 className="text-4xl font-bold mb-4">Welcome to your Aether Dashboard, {userProfile.username || user.email}!</h1>
+      <h1 className="text-4xl font-bold mb-4">Welcome, {profile.username}!</h1>
       <p className="text-lg text-gray-700">This is your secure financial overview.</p>
-      {/* Add your finance tracking components here */}
-      <p className="mt-4">Your Auth User ID: {user.id}</p>
-      <p>Your Profile ID: {userProfile.id}</p>
     </div>
   );
 }
