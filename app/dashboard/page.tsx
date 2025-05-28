@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { PageLoader, InlineLoader } from '@/components/ui/loading-spinner';
+import { TransactionSkeleton } from '@/components/ui/skeleton';
+import { Navbar, UserMenu } from '@/components/ui/navbar';
 
 interface Profile {
   id: string;
@@ -28,9 +31,21 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
   const [formValues, setFormValues] = useState({ amount: '', description: '', category: '' });
   const [txLoading, setTxLoading] = useState(false);
   const router = useRouter();
+
+  const navItems = [
+    { href: '/dashboard', label: 'Dashboard', active: true },
+    { href: '/analytics', label: 'Analytics', active: false },
+    { href: '/settings', label: 'Settings', active: false },
+  ];
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/auth/signin');
+  };
 
   useEffect(() => {
     async function loadProfile() {
@@ -68,6 +83,9 @@ export default function DashboardPage() {
   // fetch transactions after profile loads
   useEffect(() => {
     async function fetchTransactions() {
+      if (!profile) return;
+      
+      setTransactionsLoading(true);
       try {
         const res = await fetch('/api/get-transactions');
         if (res.ok) {
@@ -76,9 +94,11 @@ export default function DashboardPage() {
         }
       } catch (err) {
         console.error('Error fetching transactions:', err);
+      } finally {
+        setTransactionsLoading(false);
       }
     }
-    if (profile) fetchTransactions();
+    fetchTransactions();
   }, [profile]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -127,63 +147,103 @@ export default function DashboardPage() {
     }
   }
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) return <PageLoader />;
   if (!profile) return <div>Error loading profile.</div>;
 
   return (
-    <div className="min-h-screen p-8">
-      <h1 className="text-4xl font-bold mb-4">Welcome, {profile.username}!</h1>
-      <p className="text-lg text-gray-700">This is your secure financial overview.</p>
+    <>
+      <Navbar 
+        brand="Aether" 
+        items={navItems}
+      >
+        <UserMenu username={profile.username} onSignOut={handleSignOut} />
+      </Navbar>
+      
+      <div className="container mx-auto p-8">
+        <div className="space-y-8">
+          {/* Header Section */}
+          <div className="space-y-2">
+            <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
+              Welcome back, {profile.username}!
+            </h1>
+            <p className="text-lg text-muted-foreground">
+              Here&apos;s your financial overview and transaction management.
+            </p>
+          </div>
 
-      <section className="mt-8">
-        <h2 className="text-2xl font-semibold mb-4">Add Transaction</h2>
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-md">
-          <Input
-            type="number"
-            step="0.01"
-            placeholder="Amount (e.g., 100.50)"
-            value={formValues.amount}
-            onChange={e => setFormValues(v => ({ ...v, amount: e.target.value }))}
-            disabled={txLoading}
-            required
-          />
-          <Input
-            type="text"
-            placeholder="Description"
-            value={formValues.description}
-            onChange={e => setFormValues(v => ({ ...v, description: e.target.value }))}
-            disabled={txLoading}
-            required
-          />
-          <Input
-            type="text"
-            placeholder="Category (optional)"
-            value={formValues.category}
-            onChange={e => setFormValues(v => ({ ...v, category: e.target.value }))}
-            disabled={txLoading}
-          />
-          <Button type="submit" disabled={txLoading} className="w-fit">
-            {txLoading ? 'Adding...' : 'Add Transaction'}
-          </Button>
-        </form>
-      </section>
+          {/* Add Transaction Section */}
+          <div className="rounded-lg border bg-card p-6">
+            <h2 className="text-2xl font-semibold mb-4">Add Transaction</h2>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4 max-w-md">
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="Amount (e.g., 100.50)"
+                value={formValues.amount}
+                onChange={e => setFormValues(v => ({ ...v, amount: e.target.value }))}
+                disabled={txLoading}
+                required
+              />
+              <Input
+                type="text"
+                placeholder="Description"
+                value={formValues.description}
+                onChange={e => setFormValues(v => ({ ...v, description: e.target.value }))}
+                disabled={txLoading}
+                required
+              />
+              <Input
+                type="text"
+                placeholder="Category (optional)"
+                value={formValues.category}
+                onChange={e => setFormValues(v => ({ ...v, category: e.target.value }))}
+                disabled={txLoading}
+              />
+              <Button type="submit" disabled={txLoading} className="w-fit">
+                {txLoading ? <InlineLoader text="Adding..." /> : 'Add Transaction'}
+              </Button>
+            </form>
+          </div>
 
-      <section className="mt-12">
-        <h2 className="text-2xl font-semibold mb-4">Transactions</h2>
-        <ul className="space-y-2">
-          {transactions.map(tx => (
-            <li key={tx.id} className="p-4 border rounded-lg flex justify-between">
-              <div>
-                <p className="font-medium">{tx.description}</p>
-                <p className="text-sm text-gray-500">{new Date(tx.date).toLocaleString()}</p>
-                {tx.category && <p className="text-sm italic">{tx.category}</p>}
+          {/* Transactions Section */}
+          <div className="rounded-lg border bg-card p-6">
+            <h2 className="text-2xl font-semibold mb-4">Recent Transactions</h2>
+            
+            {transactionsLoading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <TransactionSkeleton key={i} />
+                ))}
               </div>
-              <span className="font-semibold">₹{tx.amount.toFixed(2)}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-    </div>
+            ) : transactions.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">No transactions yet. Add your first transaction above!</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {transactions.map(tx => (
+                  <div key={tx.id} className="flex items-center justify-between p-4 rounded-lg border bg-background hover:bg-accent/50 transition-colors cursor-pointer">
+                    <div className="space-y-1">
+                      <p className="font-medium">{tx.description}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(tx.date).toLocaleString()}
+                      </p>
+                      {tx.category && (
+                        <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-800 px-2.5 py-0.5 text-xs font-medium">
+                          {tx.category}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <span className="text-lg font-semibold font-mono">₹{tx.amount.toFixed(2)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
