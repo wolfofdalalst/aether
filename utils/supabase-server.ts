@@ -11,12 +11,22 @@ export async function createSupabaseServerClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      // Only getAll is required for SSR flows in App Router
       cookies: {
         getAll: () => {
           const entries = cookieStore.getAll().map(c => ({ name: c.name, value: c.value }));
           console.debug('[Supabase Server] getAll cookies:', entries);
           return entries;
+        },
+        setAll: (cookies) => {
+          try {
+            cookies.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          } catch {
+            // The `setAll` method was called from a Server Component.
+            // This can be ignored if you have middleware refreshing
+            // user sessions.
+          }
         }
       }
     }
@@ -26,16 +36,34 @@ export async function createSupabaseServerClient() {
 // Added debug logs below createSupabaseServerClient
 export async function getSession() {
   console.debug('[Supabase Server] getSession called');
-  const supabase = await createSupabaseServerClient();
-  const { data: { session }, error } = await supabase.auth.getSession();
-  console.debug('[Supabase Server] getSession result:', session, error);
-  return session;
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data: { session }, error } = await supabase.auth.getSession();
+    console.debug('[Supabase Server] getSession result:', session ? 'Session found' : 'No session', error);
+    if (error) {
+      console.error('[Supabase Server] getSession error:', error);
+      return null;
+    }
+    return session;
+  } catch (err) {
+    console.error('[Supabase Server] getSession exception:', err);
+    return null;
+  }
 }
 
 export async function getUser() {
   console.debug('[Supabase Server] getUser called');
-  const supabase = await createSupabaseServerClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-  console.debug('[Supabase Server] getUser result:', user, error);
-  return user;
+  try {
+    const supabase = await createSupabaseServerClient();
+    const { data: { user }, error } = await supabase.auth.getUser();
+    console.debug('[Supabase Server] getUser result:', user ? 'User found' : 'No user', error);
+    if (error) {
+      console.error('[Supabase Server] getUser error:', error);
+      return null;
+    }
+    return user;
+  } catch (err) {
+    console.error('[Supabase Server] getUser exception:', err);
+    return null;
+  }
 }
